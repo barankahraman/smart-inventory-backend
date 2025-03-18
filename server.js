@@ -1,34 +1,63 @@
-const fs = require('fs');
-const path = require('path');
+require('dotenv').config();
+const express = require('express');
+const mongoose = require('mongoose');
+const cors = require('cors');
 
-const itemsFilePath = path.join(__dirname, 'items.json');
+const app = express();
+const PORT = process.env.PORT || 5000;
 
-// Load existing inventory data from file
-let items = [];
-if (fs.existsSync(itemsFilePath)) {
-  items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
-}
+// Middleware
+app.use(cors());
+app.use(express.json());
 
-// Endpoint to get inventory items
-app.get('/items', (req, res) => {
-  res.json(items);
+// Connect to MongoDB
+mongoose.connect(process.env.MONGO_URI, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+  .then(() => console.log('Connected to MongoDB'))
+  .catch(err => console.error('MongoDB connection error:', err));
+
+// Define Item Schema & Model
+const itemSchema = new mongoose.Schema({
+  name: String,
+  stock: Number,
+});
+
+const Item = mongoose.model('Item', itemSchema);
+
+// Endpoint to get all items
+app.get('/items', async (req, res) => {
+  try {
+    const items = await Item.find();
+    res.json(items);
+  } catch (error) {
+    res.status(500).json({ error: 'Error fetching items' });
+  }
 });
 
 // Endpoint to update inventory stock
-app.patch('/items/:name', (req, res) => {
+app.patch('/items/:name', async (req, res) => {
   const { name } = req.params;
   const { delta } = req.body;
 
-  const item = items.find(i => i.name === name);
-  if (!item) {
-    return res.status(404).json({ error: 'Item not found' });
+  try {
+    const item = await Item.findOne({ name });
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    item.stock += delta;
+    if (item.stock < 0) item.stock = 0; // Prevent negative stock
+
+    await item.save();
+    res.json({ success: true, item });
+  } catch (error) {
+    res.status(500).json({ error: 'Error updating stock' });
   }
+});
 
-  item.stock += delta;
-  if (item.stock < 0) item.stock = 0; // Prevent negative stock
-
-  // Save updated inventory back to file
-  fs.writeFileSync(itemsFilePath, JSON.stringify(items, null, 2));
-
-  res.json({ success: true, items });
+// Start Server
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
