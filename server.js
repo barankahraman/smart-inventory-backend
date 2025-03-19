@@ -10,11 +10,18 @@ app.use(cors());
 app.use(express.json());
 
 const itemsFilePath = path.join(__dirname, 'items.json');
+const usersFilePath = path.join(__dirname, 'users.json'); // ✅ Add users.json
 
 // Load existing inventory data from file
 let items = [];
 if (fs.existsSync(itemsFilePath)) {
   items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
+}
+
+// Load users from file
+let users = {};
+if (fs.existsSync(usersFilePath)) {
+  users = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
 }
 
 // === 1) Get all inventory items ===
@@ -41,7 +48,18 @@ app.patch('/items/:name', (req, res) => {
   res.json({ success: true, items });
 });
 
-// === 3) Start the server ===
+// === 3) Login Route ===
+app.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  if (users[username] && users[username] === password) {
+    res.json({ success: true, message: `Welcome, ${username}!` });
+  } else {
+    res.status(401).json({ success: false, message: 'Invalid username or password' });
+  }
+});
+
+// === 4) Start the server ===
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
