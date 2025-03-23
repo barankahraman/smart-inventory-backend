@@ -6,36 +6,40 @@ const http = require('http');
 const WebSocket = require('ws');
 
 const app = express();
-const server = http.createServer(app); // ⬅️ Needed for WebSocket
-const wss = new WebSocket.Server({ server, path: '/ws/pi' }); // Pi will connect here
+const server = http.createServer(app);
+const wss = new WebSocket.Server({ server, path: '/ws/pi' });
 
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
 
-// ==== Inventory System ====
+// === File paths ===
 const itemsFilePath = path.join(__dirname, 'items.json');
 const usersFilePath = path.join(__dirname, 'users.json');
 
-// Load existing inventory data
+// === Load inventory and users ===
 let items = [];
 if (fs.existsSync(itemsFilePath)) {
   items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
 }
 
-// Load users
 let users = {};
 if (fs.existsSync(usersFilePath)) {
   users = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
 }
 
-// === 1) Get all inventory items ===
+// === Latest sensor data (from Raspberry Pi) ===
+let latestSensorData = {};
+
+// === API Routes ===
+
+// 1) Get all inventory items
 app.get('/items', (req, res) => {
   res.json(items);
 });
 
-// === 2) Update inventory stock ===
+// 2) Update inventory stock
 app.patch('/items/:name', (req, res) => {
   const { name } = req.params;
   const { delta } = req.body;
@@ -52,7 +56,7 @@ app.patch('/items/:name', (req, res) => {
   res.json({ success: true, items });
 });
 
-// === 3) Login ===
+// 3) Login route
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (users[username] && users[username] === password) {
@@ -62,26 +66,24 @@ app.post('/login', (req, res) => {
   }
 });
 
-// === 4) API to get latest sensor data ===
-let latestSensorData = {}; // Store the most recent data
+// 4) Serve latest sensor data
 app.get('/api/sensor-data', (req, res) => {
   res.json(latestSensorData);
 });
 
-// === 5) WebSocket for Raspberry Pi ===
+// === WebSocket for receiving sensor data from Raspberry Pi ===
 wss.on('connection', (ws) => {
   console.log('✅ Raspberry Pi connected via WebSocket');
 
   ws.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
-      console.log('📩 Received Sensor Data:', parsed);
       latestSensorData = parsed;
+      console.log('📩 Received Sensor Data:', parsed);
 
-      // Save to sensor_data.json
+      // Optional: Save to file (can be removed if not needed)
       fs.writeFileSync('sensor_data.json', JSON.stringify(latestSensorData, null, 2));
-      console.log('💾 Data written to sensor_data.json');
-
+      console.log('💾 Sensor data saved to sensor_data.json');
     } catch (err) {
       console.error('❌ Error parsing sensor data:', err);
     }
@@ -92,7 +94,7 @@ wss.on('connection', (ws) => {
   });
 });
 
-// === 6) Start the HTTP + WebSocket Server ===
+// === Start HTTP + WebSocket server ===
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
