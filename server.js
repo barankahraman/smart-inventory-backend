@@ -31,7 +31,6 @@ if (fs.existsSync(usersFilePath)) {
 
 // === Latest sensor data (from Raspberry Pi) ===
 let latestSensorData = {};
-let latestCommandFromFrontend = {}; // 🆕 New: latest command sent by frontend
 
 // === API Routes ===
 
@@ -72,24 +71,6 @@ app.get('/api/sensor-data', (req, res) => {
   res.json(latestSensorData);
 });
 
-// 5) Send command to Pi from frontend 🆕
-app.post('/api/send-command', (req, res) => {
-  latestCommandFromFrontend = req.body;
-  console.log('📨 Received command from frontend:', latestCommandFromFrontend);
-
-  // Send to connected Pi via WebSocket
-  for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify({
-        type: 'actuator_command',
-        data: latestCommandFromFrontend
-      }));
-    }
-  }
-
-  res.json({ success: true, message: 'Command sent to Raspberry Pi' });
-});
-
 // === WebSocket for receiving sensor data from Raspberry Pi ===
 wss.on('connection', (ws) => {
   console.log('✅ Raspberry Pi connected via WebSocket');
@@ -97,21 +78,14 @@ wss.on('connection', (ws) => {
   ws.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
+      latestSensorData = parsed;
+      console.log('📩 Received Sensor Data:', parsed);
 
-      // Distinguish incoming message types (optional)
-      if (parsed.type === 'sensor_data') {
-        latestSensorData = parsed.data;
-        console.log('📩 Received Sensor Data:', latestSensorData);
-
-        // Optional: Save to file
-        fs.writeFileSync('sensor_data.json', JSON.stringify(latestSensorData, null, 2));
-        console.log('💾 Sensor data saved to sensor_data.json');
-      } else {
-        console.log('📦 Received other message:', parsed);
-      }
-
+      // Optional: Save to file (can be removed if not needed)
+      fs.writeFileSync('sensor_data.json', JSON.stringify(latestSensorData, null, 2));
+      console.log('💾 Sensor data saved to sensor_data.json');
     } catch (err) {
-      console.error('❌ Error parsing message from Pi:', err);
+      console.error('❌ Error parsing sensor data:', err);
     }
   });
 
@@ -124,4 +98,3 @@ wss.on('connection', (ws) => {
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
-
