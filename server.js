@@ -14,11 +14,10 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
-// === File paths ===
+// === File Paths ===
 const itemsFilePath = path.join(__dirname, 'items.json');
 const usersFilePath = path.join(__dirname, 'users.json');
 
-// === Load inventory and users ===
 let items = [];
 if (fs.existsSync(itemsFilePath)) {
   items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
@@ -29,25 +28,23 @@ if (fs.existsSync(usersFilePath)) {
   users = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
 }
 
-// === Latest sensor data (from Raspberry Pi) ===
 let latestSensorData = {};
+let piSocket = null; // 📡 Save the current Pi socket connection
 
-// === API Routes ===
+// === Routes ===
 
-// 1) Get all inventory items
+// Get all items
 app.get('/items', (req, res) => {
   res.json(items);
 });
 
-// 2) Update inventory stock
+// Update item stock
 app.patch('/items/:name', (req, res) => {
   const { name } = req.params;
   const { delta } = req.body;
-
   const item = items.find(i => i.name === name);
-  if (!item) {
-    return res.status(404).json({ error: 'Item not found' });
-  }
+
+  if (!item) return res.status(404).json({ error: 'Item not found' });
 
   item.stock += delta;
   if (item.stock < 0) item.stock = 0;
@@ -56,45 +53,57 @@ app.patch('/items/:name', (req, res) => {
   res.json({ success: true, items });
 });
 
-// 3) Login route
+// Login route
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (users[username] && users[username] === password) {
     res.json({ success: true, message: `Welcome, ${username}!` });
   } else {
-    res.status(401).json({ success: false, message: 'Invalid username or password' });
+    res.status(401).json({ success: false, message: 'Invalid credentials' });
   }
 });
 
-// 4) Serve latest sensor data
+// Get latest sensor data
 app.get('/api/sensor-data', (req, res) => {
   res.json(latestSensorData);
 });
 
-// === WebSocket for receiving sensor data from Raspberry Pi ===
+// === Receive Command from Frontend and Send to Pi ===
+app.post('/api/send-command', (req, res) => {
+  const command = req.body;
+
+  if (piSocket && piSocket.readyState === WebSocket.OPEN) {
+    piSocket.send(JSON.stringify(command));
+    console.log("📤 Sent command to Pi:", command);
+    res.json({ success: true, message: "Command sent to Pi" });
+  } else {
+    res.status(500).json({ error: "❌ Pi not connected" });
+  }
+});
+
+// === WebSocket for Raspberry Pi ===
 wss.on('connection', (ws) => {
   console.log('✅ Raspberry Pi connected via WebSocket');
+  piSocket = ws;
 
   ws.on('message', (message) => {
     try {
       const parsed = JSON.parse(message);
       latestSensorData = parsed;
+      fs.writeFileSync('sensor_data.json', JSON.stringify(parsed, null, 2));
       console.log('📩 Received Sensor Data:', parsed);
-
-      // Optional: Save to file (can be removed if not needed)
-      fs.writeFileSync('sensor_data.json', JSON.stringify(latestSensorData, null, 2));
-      console.log('💾 Sensor data saved to sensor_data.json');
     } catch (err) {
-      console.error('❌ Error parsing sensor data:', err);
+      console.error('❌ Error parsing message from Pi:', err);
     }
   });
 
   ws.on('close', () => {
     console.log('❌ Raspberry Pi disconnected');
+    piSocket = null;
   });
 });
 
-// === Start HTTP + WebSocket server ===
+// Start HTTP + WebSocket server
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
