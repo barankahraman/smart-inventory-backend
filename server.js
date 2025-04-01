@@ -125,7 +125,7 @@ app.get('/video_feed', (req, res) => {
   });
 
   const interval = setInterval(() => {
-    if (latestFrame) {
+    if (latestStreamFrame) {
       res.write(`--frame\r\n`);
       res.write(`Content-Type: image/jpeg\r\n\r\n`);
       res.write(latestStreamFrame);
