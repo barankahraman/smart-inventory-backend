@@ -103,6 +103,44 @@ wss.on('connection', (ws) => {
   });
 });
 
+const multer = require('multer');
+const upload = multer();
+
+let latestFrame = null; // 🖼️ Store the latest frame
+
+// Pi sends camera frames here
+app.post('/upload_frame', upload.single('frame'), (req, res) => {
+  if (req.file) {
+    latestFrame = req.file.buffer;
+    return res.send('✅ Frame received');
+  }
+  res.status(400).send('❌ No frame');
+});
+
+// Frontend gets MJPEG stream here
+app.get('/video_feed', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
+    'Cache-Control': 'no-cache',
+    'Connection': 'close',
+    'Pragma': 'no-cache',
+  });
+
+  const interval = setInterval(() => {
+    if (latestFrame) {
+      res.write(`--frame\r\n`);
+      res.write(`Content-Type: image/jpeg\r\n\r\n`);
+      res.write(latestFrame);
+      res.write(`\r\n`);
+    }
+  }, 100); // ~10 FPS
+
+  req.on('close', () => {
+    clearInterval(interval);
+  });
+});
+
+
 // Start HTTP + WebSocket server
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
