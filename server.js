@@ -82,18 +82,27 @@ app.post('/api/send-command', (req, res) => {
 });
 
 // === WebSocket for Raspberry Pi ===
-wss.on('connection', (ws) => {
+
+let latestStreamFrame = null;
+
+wss.on('connection', (ws, req) => {
   console.log('✅ Raspberry Pi connected via WebSocket');
   piSocket = ws;
 
   ws.on('message', (message) => {
-    try {
-      const parsed = JSON.parse(message);
-      latestSensorData = parsed;
-      fs.writeFileSync('sensor_data.json', JSON.stringify(parsed, null, 2));
-      console.log('📩 Received Sensor Data:', parsed);
-    } catch (err) {
-      console.error('❌ Error parsing message from Pi:', err);
+    // 📸 If binary data, treat as image frame
+    if (Buffer.isBuffer(message)) {
+      latestStreamFrame = message;
+    } else {
+      try {
+        // 🧠 Assume JSON = sensor data
+        const parsed = JSON.parse(message);
+        latestSensorData = parsed;
+        fs.writeFileSync('sensor_data.json', JSON.stringify(parsed, null, 2));
+        console.log('📩 Received Sensor Data:', parsed);
+      } catch (err) {
+        console.error('❌ Error parsing message from Pi:', err);
+      }
     }
   });
 
@@ -103,19 +112,8 @@ wss.on('connection', (ws) => {
   });
 });
 
-const multer = require('multer');
-const upload = multer();
 
-let latestFrame = null; // 🖼️ Store the latest frame
 
-// Pi sends camera frames here
-app.post('/upload_frame', upload.single('frame'), (req, res) => {
-  if (req.file) {
-    latestFrame = req.file.buffer;
-    return res.send('✅ Frame received');
-  }
-  res.status(400).send('❌ No frame');
-});
 
 // Frontend gets MJPEG stream here
 app.get('/video_feed', (req, res) => {
@@ -130,10 +128,10 @@ app.get('/video_feed', (req, res) => {
     if (latestFrame) {
       res.write(`--frame\r\n`);
       res.write(`Content-Type: image/jpeg\r\n\r\n`);
-      res.write(latestFrame);
+      res.write(latestStreamFrame);
       res.write(`\r\n`);
     }
-  }, 100); // ~10 FPS
+  }, 8);
 
   req.on('close', () => {
     clearInterval(interval);
