@@ -30,7 +30,7 @@ if (fs.existsSync(usersFilePath)) {
 }
 
 let latestSensorData = {};
-let piSocket = null; // 📡 Save the current Pi socket connection
+const piSockets = new Map();  // Key: unique Pi ID, Value: WebSocket
 
 // === Routes ===
 
@@ -71,16 +71,17 @@ app.get('/api/sensor-data', (req, res) => {
 
 // === Receive Command from Frontend and Send to Pi ===
 app.post('/api/send-command', (req, res) => {
-  const command = req.body;
+  const { piId, ...command } = req.body;
+  const socket = piSockets.get(piId);
 
-  if (piSocket && piSocket.readyState === WebSocket.OPEN) {
-    piSocket.send(JSON.stringify(command));
-    console.log("📤 Sent command to Pi:", command);
-    res.json({ success: true, message: "Command sent to Pi" });
-  } else {
-    res.status(500).json({ error: "❌ Pi not connected" });
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(command));
+    return res.json({ success: true, message: `📤 Sent to Pi ${piId}` });
   }
+
+  return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
 });
+
 
 app.post('/api/mode', (req, res) => {
   const { type, mode, threshold } = req.body;
@@ -117,34 +118,36 @@ let latestStreamFrame = null;
 
 wss.on('connection', (ws, req) => {
   console.log('✅ Raspberry Pi connected via WebSocket');
-  piSocket = ws;
+
+  const piId = req.headers['sec-websocket-key']; // or use query param later
+  piSockets.set(piId, ws);
 
   ws.on('message', (message) => {
-    // 📸 If binary data, treat as image frame
+    // Handle incoming frame
     if (Buffer.isBuffer(message)) {
-      latestStreamFrame = message;
+      latestStreamFrame = message; // Optionally track per Pi ID here
     } else {
       try {
-        // 🧠 Assume JSON = sensor data
         const parsed = JSON.parse(message);
         if (parsed.type === "sensor" && parsed.data) {
           latestSensorData = parsed.data;
           fs.writeFileSync('sensor_data.json', JSON.stringify(parsed.data, null, 2));
-          console.log('📩 Received Sensor Data:', parsed);
+          console.log(`📩 [${piId}] Sensor Data:`, parsed.data);
         } else {
-          console.log('📨 Received non-sensor message:', parsed);
+          console.log(`📨 [${piId}] Message:`, parsed);
         }
       } catch (err) {
-        console.error('❌ Error parsing message from Pi:', err);
+        console.error(`❌ [${piId}] Invalid JSON:`, err);
       }
     }
   });
 
   ws.on('close', () => {
-    console.log('❌ Raspberry Pi disconnected');
-    piSocket = null;
+    console.log(`❌ Pi disconnected: ${piId}`);
+    piSockets.delete(piId);
   });
 });
+
 
 
 
