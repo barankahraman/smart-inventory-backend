@@ -126,9 +126,13 @@ wss.on('connection', (ws, req) => {
       try {
         // 🧠 Assume JSON = sensor data
         const parsed = JSON.parse(message);
-        latestSensorData = parsed;
-        fs.writeFileSync('sensor_data.json', JSON.stringify(parsed, null, 2));
-        console.log('📩 Received Sensor Data:', parsed);
+        if (parsed.type === "sensor" && parsed.data) {
+          latestSensorData = parsed.data;
+          fs.writeFileSync('sensor_data.json', JSON.stringify(parsed.data, null, 2));
+          console.log('📩 Received Sensor Data:', parsed);
+        } else {
+          console.log('📨 Received non-sensor message:', parsed);
+        }
       } catch (err) {
         console.error('❌ Error parsing message from Pi:', err);
       }
