@@ -101,7 +101,7 @@ app.post('/api/mode', (req, res) => {
         type: "mode",
         mode: currentMode,
         threshold: currentMode === "auto" ? currentThreshold : undefined
-      })):
+      }));
     }
 
     return res.json({ success: true, mode: currentMode, threshold: currentThreshold });
