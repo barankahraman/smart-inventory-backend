@@ -7,7 +7,9 @@ const WebSocket = require('ws');
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server, path: '/ws/pi' });
+
+const sensorWSS = new WebSocket.Server({ server, path: '/ws/sensor' });
+const cameraWSS = new WebSocket.Server({ server, path: '/ws/camera' });
 
 const PORT = process.env.PORT || 5000;
 
@@ -114,40 +116,45 @@ app.post('/api/mode', (req, res) => {
 
 // === WebSocket for Raspberry Pi ===
 
-let latestStreamFrame = null;
 
-wss.on('connection', (ws, req) => {
-  console.log('✅ Raspberry Pi connected via WebSocket');
-
-  const piId = req.headers['sec-websocket-key']; // or use query param later
-  piSockets.set(piId, ws);
+sensorWSS.on('connection', (ws) => {
+  console.log("📡 Sensor Pi connected");
 
   ws.on('message', (message) => {
-    // Handle incoming frame
-    if (Buffer.isBuffer(message)) {
-      latestStreamFrame = message; // Optionally track per Pi ID here
-    } else {
-      try {
-        const parsed = JSON.parse(message);
-        if (parsed.type === "sensor" && parsed.data) {
-          latestSensorData = parsed.data;
-          fs.writeFileSync('sensor_data.json', JSON.stringify(parsed.data, null, 2));
-          console.log(`📩 [${piId}] Sensor Data:`, parsed.data);
-        } else {
-          console.log(`📨 [${piId}] Message:`, parsed);
-        }
-      } catch (err) {
-        console.error(`❌ [${piId}] Invalid JSON:`, err);
+    try {
+      const parsed = JSON.parse(message);
+      if (parsed.type === "sensor" && parsed.data) {
+        latestSensorData = parsed.data;
+        fs.writeFileSync('sensor_data.json', JSON.stringify(parsed.data, null, 2));
+        console.log("📩 Sensor Data:", parsed.data);
       }
+    } catch (err) {
+      console.error("❌ Sensor JSON parse error:", err);
     }
   });
 
   ws.on('close', () => {
-    console.log(`❌ Pi disconnected: ${piId}`);
-    piSockets.delete(piId);
+    console.log("❌ Sensor Pi disconnected");
   });
 });
 
+
+let latestStreamFrame = null;
+
+cameraWSS.on('connection', (ws) => {
+  console.log("📸 Camera Pi connected");
+
+  ws.on('message', (message) => {
+    if (Buffer.isBuffer(message)) {
+      latestStreamFrame = message;
+    }
+  });
+
+  ws.on('close', () => {
+    console.log("❌ Camera Pi disconnected");
+    latestStreamFrame = null;
+  });
+});
 
 
 
