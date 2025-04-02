@@ -86,33 +86,40 @@ app.post('/api/send-command', (req, res) => {
 
 
 app.post('/api/mode', (req, res) => {
-  const { type, mode, threshold } = req.body;
+  const { type, mode, threshold, piId } = req.body;
 
-  if (type === "mode") {
-    if (mode === "manual") {
-      currentMode = "manual";
-      console.log("🧍 Switched to MANUAL mode");
-    } else if (mode === "auto") {
-      currentMode = "auto";
-      if (typeof threshold === "number") {
-        currentThreshold = threshold;
-        console.log(`🤖 Switched to AUTO mode with threshold ${threshold}°C`);
-      }
+  if (type !== "mode" || !piId) {
+    return res.status(400).json({ error: "Missing or invalid request payload" });
+  }
+
+  let currentMode = "manual";
+  let currentThreshold = 30; // default if not provided
+
+  if (mode === "manual") {
+    currentMode = "manual";
+    console.log("🧍 Switched to MANUAL mode");
+  } else if (mode === "auto") {
+    currentMode = "auto";
+    if (typeof threshold === "number") {
+      currentThreshold = threshold;
+      console.log(`🤖 Switched to AUTO mode with threshold ${threshold}°C`);
     }
+  }
 
-    if (piSocket && piSocket.readyState === WebSocket.OPEN) {
-      piSocket.send(JSON.stringify({
-        type: "mode",
-        mode: currentMode,
-        threshold: currentMode === "auto" ? currentThreshold : undefined
-      }));
-    }
-
+  const socket = piSockets.get(piId);
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({
+      type: "mode",
+      mode: currentMode,
+      threshold: currentMode === "auto" ? currentThreshold : undefined
+    }));
     return res.json({ success: true, mode: currentMode, threshold: currentThreshold });
   }
 
-  res.status(400).json({ error: "Invalid request payload" });
+  return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
 });
+
+
 
 // === WebSocket for Raspberry Pi ===
 
