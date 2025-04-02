@@ -25,14 +25,13 @@ if (fs.existsSync(itemsFilePath)) {
   items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
 }
 
-
 let users = {};
 if (fs.existsSync(usersFilePath)) {
   users = JSON.parse(fs.readFileSync(usersFilePath, 'utf8'));
 }
 
 let latestSensorData = {};
-const piSockets = new Map();  // Key: unique Pi ID, Value: WebSocket
+let latestStreamFrame = null;
 
 // === Routes ===
 
@@ -71,58 +70,7 @@ app.get('/api/sensor-data', (req, res) => {
   res.json(latestSensorData);
 });
 
-// === Receive Command from Frontend and Send to Pi ===
-app.post('/api/send-command', (req, res) => {
-  const { piId, ...command } = req.body;
-  const socket = piSockets.get(piId);
-
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify(command));
-    return res.json({ success: true, message: `📤 Sent to Pi ${piId}` });
-  }
-
-  return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
-});
-
-
-app.post('/api/mode', (req, res) => {
-  const { type, mode, threshold, piId } = req.body;
-
-  if (type !== "mode" || !piId) {
-    return res.status(400).json({ error: "Missing or invalid request payload" });
-  }
-
-  let currentMode = "manual";
-  let currentThreshold = 30; // default if not provided
-
-  if (mode === "manual") {
-    currentMode = "manual";
-    console.log("🧍 Switched to MANUAL mode");
-  } else if (mode === "auto") {
-    currentMode = "auto";
-    if (typeof threshold === "number") {
-      currentThreshold = threshold;
-      console.log(`🤖 Switched to AUTO mode with threshold ${threshold}°C`);
-    }
-  }
-
-  const socket = piSockets.get(piId);
-  if (socket && socket.readyState === WebSocket.OPEN) {
-    socket.send(JSON.stringify({
-      type: "mode",
-      mode: currentMode,
-      threshold: currentMode === "auto" ? currentThreshold : undefined
-    }));
-    return res.json({ success: true, mode: currentMode, threshold: currentThreshold });
-  }
-
-  return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
-});
-
-
-
 // === WebSocket for Raspberry Pi ===
-
 
 sensorWSS.on('connection', (ws) => {
   console.log("📡 Sensor Pi connected");
@@ -145,9 +93,6 @@ sensorWSS.on('connection', (ws) => {
   });
 });
 
-
-let latestStreamFrame = null;
-
 cameraWSS.on('connection', (ws) => {
   console.log("📸 Camera Pi connected");
 
@@ -162,9 +107,6 @@ cameraWSS.on('connection', (ws) => {
     latestStreamFrame = null;
   });
 });
-
-
-
 
 // Frontend gets MJPEG stream here
 app.get('/video_feed', (req, res) => {
@@ -188,7 +130,6 @@ app.get('/video_feed', (req, res) => {
     clearInterval(interval);
   });
 });
-
 
 // Start HTTP + WebSocket server
 server.listen(PORT, () => {
