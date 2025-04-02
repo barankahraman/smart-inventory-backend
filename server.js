@@ -8,8 +8,7 @@ const WebSocket = require('ws');
 const app = express();
 const server = http.createServer(app);
 
-const sensorWSS = new WebSocket.Server({ server, path: '/ws/sensor' });
-const cameraWSS = new WebSocket.Server({ server, path: '/ws/camera' });
+const wss = new WebSocket.Server({ noServer: true });
 
 const PORT = process.env.PORT || 5000;
 
@@ -35,12 +34,10 @@ let latestStreamFrame = null;
 
 // === Routes ===
 
-// Get all items
 app.get('/items', (req, res) => {
   res.json(items);
 });
 
-// Update item stock
 app.patch('/items/:name', (req, res) => {
   const { name } = req.params;
   const { delta } = req.body;
@@ -55,7 +52,6 @@ app.patch('/items/:name', (req, res) => {
   res.json({ success: true, items });
 });
 
-// Login route
 app.post('/login', (req, res) => {
   const { username, password } = req.body;
   if (users[username] && users[username] === password) {
@@ -65,50 +61,10 @@ app.post('/login', (req, res) => {
   }
 });
 
-// Get latest sensor data
 app.get('/api/sensor-data', (req, res) => {
   res.json(latestSensorData);
 });
 
-// === WebSocket for Raspberry Pi ===
-
-sensorWSS.on('connection', (ws) => {
-  console.log("📡 Sensor Pi connected");
-
-  ws.on('message', (message) => {
-    try {
-      const parsed = JSON.parse(message);
-      if (parsed.type === "sensor" && parsed.data) {
-        latestSensorData = parsed.data;
-        fs.writeFileSync('sensor_data.json', JSON.stringify(parsed.data, null, 2));
-        console.log("📩 Sensor Data:", parsed.data);
-      }
-    } catch (err) {
-      console.error("❌ Sensor JSON parse error:", err);
-    }
-  });
-
-  ws.on('close', () => {
-    console.log("❌ Sensor Pi disconnected");
-  });
-});
-
-cameraWSS.on('connection', (ws) => {
-  console.log("📸 Camera Pi connected");
-
-  ws.on('message', (message) => {
-    if (Buffer.isBuffer(message)) {
-      latestStreamFrame = message;
-    }
-  });
-
-  ws.on('close', () => {
-    console.log("❌ Camera Pi disconnected");
-    latestStreamFrame = null;
-  });
-});
-
-// Frontend gets MJPEG stream here
 app.get('/video_feed', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
@@ -131,7 +87,63 @@ app.get('/video_feed', (req, res) => {
   });
 });
 
-// Start HTTP + WebSocket server
+// === Handle Upgrade Manually for Multiple WS Paths ===
+server.on('upgrade', (req, socket, head) => {
+  const { url } = req;
+  if (url === '/ws/sensor' || url === '/ws/camera') {
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      ws.pathname = url;
+      wss.emit('connection', ws, req);
+    });
+  } else {
+    socket.destroy();
+  }
+});
+
+// === Unified WebSocket Handler ===
+wss.on('connection', (ws, req) => {
+  const ip = req.socket.remoteAddress;
+  console.log(`🔌 WebSocket connection from ${ip} to ${ws.pathname}`);
+
+  if (ws.pathname === '/ws/sensor') {
+    ws.on('message', (message) => {
+      try {
+        const raw = Buffer.isBuffer(message) ? message.toString() : message;
+        const parsed = JSON.parse(raw);
+
+        if (parsed.type === "sensor" && parsed.data) {
+          latestSensorData = parsed.data;
+          fs.writeFileSync('sensor_data.json', JSON.stringify(parsed.data, null, 2));
+          console.log("📩 Sensor Data:", parsed.data);
+        } else {
+          console.log("⚠️ Unknown sensor payload:", parsed);
+        }
+      } catch (err) {
+        console.error("❌ Sensor JSON parse error:", err);
+      }
+    });
+
+    ws.on('close', () => {
+      console.log("❌ Sensor Pi disconnected");
+    });
+  }
+
+  else if (ws.pathname === '/ws/camera') {
+    ws.on('message', (message) => {
+      if (Buffer.isBuffer(message)) {
+        latestStreamFrame = message;
+      } else {
+        console.log("⚠️ Non-buffer camera data:", message.toString());
+      }
+    });
+
+    ws.on('close', () => {
+      console.log("❌ Camera Pi disconnected");
+      latestStreamFrame = null;
+    });
+  }
+});
+
 server.listen(PORT, () => {
   console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
