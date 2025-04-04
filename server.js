@@ -68,7 +68,7 @@ app.get('/api/sensor-data', (req, res) => {
 app.post('/api/send-command', (req, res) => {
   const command = req.body;
   const piId = "sensor-pi-1";
-  const socket piSockets.get(piId);
+  const socket = piSockets.get(piId);
 
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'actuator', data: command }));
