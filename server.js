@@ -65,6 +65,34 @@ app.get('/api/sensor-data', (req, res) => {
   res.json(latestSensorData);
 });
 
+app.post('/api/send-command', (req, res) => {
+  const command = req.body;
+  const piId = "sensor-pi-1";
+  const socket piSockets.get(piId);
+
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'actuator', data: command }));
+    console.log("📤 Sent actuator command to Pi:", command);
+    return res.json({ success: true });
+  }
+  return res.status(500).json({ error: "❌ Pi not connected" });
+});
+
+app.post('/api/mode', (req, res) => {
+  const { type, mode, threshold, piId } = req.body;
+  if (type !== 'mode' || !piId) {
+    return res.status(400).json({ error: 'Missing or invalid request payload' });
+  }
+
+  const socket = piSockets.get(piId);
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: 'mode', mode, threshold }));
+    console.log(`📤 Sent mode update to ${piId}:`, { mode, threshold });
+    return res.json({ success: true, mode, threshold });
+  }
+  return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
+});
+
 app.get('/video_feed', (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'multipart/x-mixed-replace; boundary=frame',
@@ -106,6 +134,9 @@ wss.on('connection', (ws, req) => {
   console.log(`🔌 WebSocket connection from ${ip} to ${ws.pathname}`);
 
   if (ws.pathname === '/ws/sensor') {
+    const piId = 'sensor-pi-1';
+    piSockets.set(piId, ws);
+    
     ws.on('message', (message) => {
       try {
         const raw = Buffer.isBuffer(message) ? message.toString() : message;
@@ -125,6 +156,7 @@ wss.on('connection', (ws, req) => {
 
     ws.on('close', () => {
       console.log("❌ Sensor Pi disconnected");
+      piSockets.delete(piId);
     });
   }
 
