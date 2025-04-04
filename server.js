@@ -15,6 +15,8 @@ const PORT = process.env.PORT || 5000;
 app.use(cors());
 app.use(express.json());
 
+const piSockets = new Map();
+
 // === File Paths ===
 const itemsFilePath = path.join(__dirname, 'items.json');
 const usersFilePath = path.join(__dirname, 'users.json');
