@@ -132,7 +132,7 @@ app.get('/video_feed', (req, res) => {
 // === Handle Upgrade Manually for Multiple WS Paths ===
 server.on('upgrade', (req, socket, head) => {
   const { url } = req;
-  if (url === '/ws/sensor' || url === '/ws/camera') {
+  if (url === '/ws/sensor' || url === '/ws/camera' || url === '/ws/updates') {
     wss.handleUpgrade(req, socket, head, (ws) => {
       ws.pathname = url;
       wss.emit('connection', ws, req);
@@ -188,6 +188,14 @@ wss.on('connection', (ws, req) => {
       latestStreamFrame = null;
     });
   }
+
+  else if (ws.pathname === '/ws/updates') {
+    console.log("🟢 Client subscribed to updates");
+
+    ws.on('close', () => {
+      console.log("🔌 Update client disconnected");
+    });
+  }  
 });
 
 server.listen(PORT, () => {
