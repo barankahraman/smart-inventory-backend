@@ -8,6 +8,9 @@ const WebSocket = require('ws');
 const app = express();
 const server = http.createServer(app);
 
+let lastThreshold = 26;
+let lastMode = "manual";
+
 const wss = new WebSocket.Server({ noServer: true });
 
 function broadcastToClients(event) {
@@ -97,6 +100,9 @@ app.post('/api/mode', (req, res) => {
     return res.status(400).json({ error: 'Missing or invalid request payload' });
   }
 
+  if (mode) lastMode = mode;
+  if (threshold !== undefined) lastThreshold = threshold;
+
   const socket = piSockets.get(piId);
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'mode', mode, threshold }));
@@ -105,6 +111,10 @@ app.post('/api/mode', (req, res) => {
     return res.json({ success: true, mode, threshold });
   }
   return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
+});
+
+app.get('/api/mode' (req, res) => {
+  res.json({ mode: lastMode, threshold: lastThreshold });
 });
 
 app.get('/video_feed', (req, res) => {
