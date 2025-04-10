@@ -113,7 +113,7 @@ app.post('/api/mode', (req, res) => {
   return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
 });
 
-app.get('/api/mode' (req, res) => {
+app.get('/api/mode', (req, res) => {
   res.json({ mode: lastMode, threshold: lastThreshold });
 });
 
