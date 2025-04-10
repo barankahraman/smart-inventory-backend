@@ -10,6 +10,16 @@ const server = http.createServer(app);
 
 const wss = new WebSocket.Server({ noServer: true });
 
+function broadcastToClients(event) {
+  const message = JSON.stringify(event);
+
+  wss.clients.forEach((client) => {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(message);
+    }
+  });
+}
+
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
@@ -75,6 +85,7 @@ app.post('/api/send-command', (req, res) => {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'actuator', data: command }));
     console.log("📤 Sent actuator command to Pi:", command);
+    broadcastToClients({ type: "actuator_update", actuator })
     return res.json({ success: true });
   }
   return res.status(500).json({ error: "❌ Pi not connected" });
@@ -90,6 +101,7 @@ app.post('/api/mode', (req, res) => {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'mode', mode, threshold }));
     console.log(`📤 Sent mode update to ${piId}:`, { mode, threshold });
+    broadcastToClients({ type: "mode_update", mode, threshold });
     return res.json({ success: true, mode, threshold });
   }
   return res.status(500).json({ error: `❌ Pi ${piId} not connected` });
