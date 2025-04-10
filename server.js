@@ -14,7 +14,7 @@ function broadcastToClients(event) {
   const message = JSON.stringify(event);
 
   wss.clients.forEach((client) => {
-    if (client.readyState === WebSocket.OPEN) {
+    if (client.readyState === WebSocket.OPEN && client.pathname === '/ws/updates') {
       client.send(message);
     }
   });
