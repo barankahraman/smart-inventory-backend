@@ -88,7 +88,7 @@ app.post('/api/send-command', (req, res) => {
   if (socket && socket.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify({ type: 'actuator', data: command }));
     console.log("📤 Sent actuator command to Pi:", command);
-    broadcastToClients({ type: "actuator_update", actuator })
+    broadcastToClients({ type: "actuator_update", actuator: req.body.actuator })
     return res.json({ success: true });
   }
   return res.status(500).json({ error: "❌ Pi not connected" });
