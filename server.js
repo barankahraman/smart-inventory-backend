@@ -10,6 +10,7 @@ const server = http.createServer(app);
 
 let lastThreshold = 26;
 let lastMode = "manual";
+let items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
 
 const wss = new WebSocket.Server({ noServer: true });
 
