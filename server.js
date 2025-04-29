@@ -35,7 +35,6 @@ const piSockets = new Map();
 const itemsFilePath = path.join(__dirname, 'items.json');
 const usersFilePath = path.join(__dirname, 'users.json');
 
-let items = [];
 if (fs.existsSync(itemsFilePath)) {
   items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
 }
