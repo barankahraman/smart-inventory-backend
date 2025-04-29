@@ -65,6 +65,13 @@ app.patch('/items/:name', (req, res) => {
   if (item.stock < 0) item.stock = 0;
 
   fs.writeFileSync(itemsFilePath, JSON.stringify(items, null, 2));
+
+  broadcastToClients({
+    type: "stock_update",
+    item: name,
+    newStock: item.stock
+  });
+  
   res.json({ success: true, items });
 });
 
