@@ -10,7 +10,6 @@ const server = http.createServer(app);
 
 let lastThreshold = 26;
 let lastMode = "manual";
-let items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
 
 const wss = new WebSocket.Server({ noServer: true });
 
@@ -35,6 +34,7 @@ const piSockets = new Map();
 const itemsFilePath = path.join(__dirname, 'items.json');
 const usersFilePath = path.join(__dirname, 'users.json');
 
+let items = [];
 if (fs.existsSync(itemsFilePath)) {
   items = JSON.parse(fs.readFileSync(itemsFilePath, 'utf8'));
 }
